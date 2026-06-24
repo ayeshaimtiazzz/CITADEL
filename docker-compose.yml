@@ -1,0 +1,44 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: citadel-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+
+  # Langfuse v2 self-hosted (free) for full request tracing.
+  # First run: visit http://localhost:3000, sign up locally, create a project,
+  # then copy the generated public/secret keys into your .env file.
+  langfuse-db:
+    image: postgres:15
+    container_name: citadel-langfuse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - ./langfuse_pg_data_v2:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: citadel-langfuse
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_SECRET: citadel_dev_secret_change_me
+      SALT: citadel_dev_salt_change_me
+      NEXTAUTH_URL: http://localhost:3000
+      TELEMETRY_ENABLED: "false"
